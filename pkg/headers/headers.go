@@ -2,6 +2,7 @@ package headers
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -14,18 +15,25 @@ import (
 )
 
 var lintMode = flag.Bool("lint", false, "enables lint mode (useful for Git hooks)")
+var verbose = flag.Bool("v", false, "enables verbose mode")
 
-var allowFinish = true
+type transformation struct {
+	Filename string
+	// NewFileContents will be nil if no updates need to be made
+	NewFileContents []byte
+}
+
+func (tf *transformation) apply(permCode int) error {
+	if tf.NewFileContents == nil {
+		return nil
+	}
+	return ioutil.WriteFile(tf.Filename, tf.NewFileContents, fs.FileMode(permCode))
+}
 
 func Run(cfg *Config, cmdLineFiles []string) error {
 
-	cfg.makeSpecHeaders()
-	err := cfg.makeSpecRegexp()
-	if err != nil {
-		return err
-	}
-
 	var files []string
+	var err error
 	if len(cmdLineFiles) == 0 {
 		files, err = discoverFiles(".", cfg)
 		if err != nil {
@@ -38,22 +46,55 @@ func Run(cfg *Config, cmdLineFiles []string) error {
 		}
 		files = filtered
 	}
-	
-	fmt.Println(files)
+
+	if *verbose {
+		fmt.Fprintln(os.Stderr, "Running against files:", files)
+	}
+
+	var transformations []*transformation
 
 	for _, fname := range files {
-		err = applyHeaderToFile(fname, cfg)
+		tf, err := generateTransformationForFile(fname, cfg)
 		if err != nil {
 			return err
-		}	
-	}
-	
-	if *lintMode {
-		if allowFinish {
-			fmt.Fprintln(os.Stderr, "LINT: ok")
-		} else {
-			os.Exit(1)
 		}
+		transformations = append(transformations, tf)
+	}
+
+	if *verbose {
+		s := "Applying transformations"
+		if *lintMode {
+			s = "Checking transformations"
+		}
+		fmt.Fprintln(os.Stderr, s)
+	}
+
+	var hasLintingFailed bool
+	for _, tf := range transformations {
+		if tf.NewFileContents == nil {
+			if *verbose {
+				fmt.Fprintf(os.Stderr, "%s: no action required\n", tf.Filename)
+			}
+			continue
+		}
+
+		if *lintMode {
+			fmt.Fprintf(os.Stderr, "LINT: %s has not had file headers applied\n", tf.Filename)
+			hasLintingFailed = true
+			continue
+		}
+
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "%s: updating file content\n", tf.Filename)
+		}
+		err = tf.apply(0644)
+		if err != nil {
+			return err
+		}
+	}
+
+	if hasLintingFailed {
+		return errors.New("linting did not pass")
 	}
 
 	return nil
@@ -168,18 +209,18 @@ func renderHeader(headerText string, tplContent *headerTemplate) (*bytes.Buffer,
 	return buf, nil
 }
 
-func applyHeaderToFile(fpath string, cfg *Config) error {
+func generateTransformationForFile(fpath string, cfg *Config) (*transformation, error) {
 
-	ogFileCont, err := ioutil.ReadFile(fpath)
+	originalFileContents, err := ioutil.ReadFile(fpath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var baseFilepath string
+	var templateFilename string
 	if cfg.Options.FullFilepath {
-		baseFilepath = fpath
+		templateFilename = fpath
 	} else {
-		baseFilepath = filepath.Base(fpath)
+		templateFilename = filepath.Base(fpath)
 	}
 
 	var chosenSpec *Spec
@@ -192,29 +233,27 @@ func applyHeaderToFile(fpath string, cfg *Config) error {
 
 	if chosenSpec == nil {
 		fmt.Fprintf(os.Stderr, "WARN: Cannot find spec for file '%s'\n", fpath)
-		return nil
+		return nil, nil
 	}
 
-	newFileCont, err := applyHeaderToBytes(baseFilepath, cfg.HeaderText, chosenSpec, ogFileCont)
+	newFileContents, err := applyHeaderToBytes(templateFilename, cfg.HeaderText, originalFileContents, chosenSpec)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if !bytes.Equal(ogFileCont, newFileCont) {
-
-		if *lintMode {
-			fmt.Fprintf(os.Stderr, "LINT: %s has not had file headers applied\n", fpath)
-			allowFinish = false
-			return nil
-		}
-
-		return ioutil.WriteFile(fpath, newFileCont, 0644)
+	if bytes.Equal(originalFileContents, newFileContents) {
+		return &transformation{
+			Filename: fpath,
+		}, nil
 	}
 
-	return nil
+	return &transformation{
+		Filename:        fpath,
+		NewFileContents: newFileContents,
+	}, nil
 }
 
-func applyHeaderToBytes(fname, header string, spec *Spec, file []byte) ([]byte, error) {
+func applyHeaderToBytes(fname, header string, file []byte, spec *Spec) ([]byte, error) {
 
 	specHeader := transformHeaderBySpec(header, spec)
 
