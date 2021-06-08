@@ -93,14 +93,19 @@ func Run(cfg *Config, cmdLineFiles []string) error {
 		}
 	}
 
-	if hasLintingFailed {
-		return errors.New("linting did not pass")
+	if *lintMode {
+		if hasLintingFailed {
+			return errors.New("linting did not pass")
+		} else {
+			fmt.Fprintln(os.Stderr, "LINT: ok")
+		}
 	}
+	
 
 	return nil
 }
 
-func makeFileRegexp(cfg *Config) (*regexp.Regexp, error) {
+func makeFileRegexp(cfg *Config) (func (string) bool, error) {
 	var bx []string
 	for _, rg := range cfg.Spec {
 		bx = append(bx, rg.Regex)
@@ -110,7 +115,18 @@ func makeFileRegexp(cfg *Config) (*regexp.Regexp, error) {
 	if err != nil {
 		return nil, err
 	}
-	return matchRegexp, nil
+
+	if cfg.Options.ExcludeRegex != "" {
+		excludeRegexp, err := regexp.Compile(cfg.Options.ExcludeRegex)
+		if err != nil {
+			return nil, err
+		}
+		return func (mx string) bool {
+			return matchRegexp.MatchString(mx) && !excludeRegexp.MatchString(mx)
+		}, nil
+	}
+
+	return matchRegexp.MatchString, nil
 }
 
 func discoverFiles(dir string, cfg *Config) ([]string, error) {
@@ -127,7 +143,7 @@ func discoverFiles(dir string, cfg *Config) ([]string, error) {
 			return err
 		}
 
-		if matchRegexp.MatchString(path) {
+		if matchRegexp(path) {
 			o = append(o, path)
 		}
 
@@ -149,7 +165,7 @@ func filterFileList(flist []string, cfg *Config) ([]string, error) {
 
 	var n int
 	for _, item := range flist {
-		if matchRegexp.MatchString(item) {
+		if matchRegexp(item) {
 			flist[n] = item
 			n += 1
 		}

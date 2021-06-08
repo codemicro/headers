@@ -15,8 +15,7 @@ type Spec struct {
 
 type Options struct {
 	FullFilepath bool
-	Include      string
-	Exclude      string
+	ExcludeRegex string
 }
 
 type Config struct {
