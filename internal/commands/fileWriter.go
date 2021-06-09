@@ -1,4 +1,4 @@
-package hooks
+package commands
 
 import (
 	"errors"
@@ -10,15 +10,11 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const githookContent = "#!/bin/sh\nfiles=`git diff --name-only --cached`\n./headers --lint $files\n"
-
-func registerGitHookInstall() *cli.Command {
+func registerFileWriter(defaultOutputFilename, commandName, description string, alias []string, fileContent []byte) *cli.Command {
 
 	const (
 		outputFilenameFlag         = "output"
 		overwriteExistingFilesFlag = "overwrite"
-
-		defaultOutputFilename = ".git/hooks/pre-commit"
 	)
 
 	gitHookInstall := func(ctx *cli.Context) error {
@@ -42,20 +38,20 @@ func registerGitHookInstall() *cli.Command {
 			return err
 		}
 
-		err = ioutil.WriteFile(outputFilename, []byte(githookContent), 0644)
+		err = ioutil.WriteFile(outputFilename, fileContent, 0644)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Installed Git hook to %s\n", outputFilename)
+		fmt.Printf("Written to %s\n", outputFilename)
 
 		return nil
 	}
 
 	return &cli.Command{
-		Name:    "install",
-		Aliases: []string{"i"},
-		Usage:   "install pre-commit git lint hook",
+		Name:    commandName,
+		Aliases: alias,
+		Usage:   description,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    outputFilenameFlag,

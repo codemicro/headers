@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/codemicro/headers/internal/hooks"
+	"github.com/codemicro/headers/internal/commands"
 	"github.com/codemicro/headers/internal/headers"
 	"github.com/urfave/cli/v2"
 )
@@ -52,7 +52,8 @@ func main() {
 		},
 
 		Commands: []*cli.Command{
-			hooks.RegisterGitHooks(),
+			commands.RegisterGitHooks(),
+			commands.RegisterDefault(),
 		},
 	}
 
