@@ -1,7 +1,10 @@
 package headers
 
 import (
+	"errors"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"regexp"
 
 	"github.com/pelletier/go-toml/v2"
@@ -27,6 +30,23 @@ type Config struct {
 
 func LoadConfigFromFile(filename string) (*Config, error) {
 
+	if filename == "" {
+
+		if Verbose {
+			logger.Println("No config filename provded, searching parent directories")
+		}
+
+		fn, err := locateConfigFile()
+		if err != nil {
+			return nil, err
+		}
+		filename = fn
+	}
+
+	if Verbose {
+		logger.Printf("Loading config file %s\n", filename)
+	}
+
 	fcont, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -49,6 +69,39 @@ func LoadConfigFromFile(filename string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// locateConfigFile walks up parents directories and searches for a
+// headers.toml file, returning an error if one cannot be found
+func locateConfigFile() (string, error) {
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	searchDir := cwd
+
+	for searchDir != "/" {
+
+		if Verbose {
+			logger.Printf("Searching for config file in %s\n", searchDir)
+		}
+
+		fp := filepath.Join(searchDir, "headers.toml")
+		if _, err := os.Stat(fp); err == nil {
+			// file found in this directory
+			if Verbose {
+				logger.Printf("Found for config file %s\n", fp)
+			}
+			return fp, nil
+		}
+		
+		searchDir = filepath.Dir(searchDir)
+
+	}
+
+	return "", errors.New("could not find configuration file")
 }
 
 // makeSpecHeaders generates header strings for each Spec in Config

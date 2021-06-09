@@ -19,8 +19,7 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "inputfile",
-				Value:   "headers.toml",
-				Usage:   "input file to read configuration from",
+				Usage:   "input file to read configuration from (default \"headers.toml\")",
 				Aliases: []string{"i"},
 			},
 			&cli.BoolFlag{

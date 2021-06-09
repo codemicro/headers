@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,6 +16,8 @@ import (
 
 var LintMode bool
 var Verbose bool
+
+var logger = log.New(os.Stderr, "", 0)
 
 type transformation struct {
 	Filename string
