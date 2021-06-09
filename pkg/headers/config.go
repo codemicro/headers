@@ -36,7 +36,7 @@ func LoadConfigFromFile(filename string) (*Config, error) {
 			logger.Println("No config filename provded, searching parent directories")
 		}
 
-		fn, err := locateConfigFile()
+		fn, err := locateFile("headers.toml")
 		if err != nil {
 			return nil, err
 		}
@@ -71,9 +71,9 @@ func LoadConfigFromFile(filename string) (*Config, error) {
 	return cfg, nil
 }
 
-// locateConfigFile walks up parents directories and searches for a
+// locateFile walks up parents directories and searches for a
 // headers.toml file, returning an error if one cannot be found
-func locateConfigFile() (string, error) {
+func locateFile(filename string) (string, error) {
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -88,7 +88,7 @@ func locateConfigFile() (string, error) {
 			logger.Printf("Searching for config file in %s\n", searchDir)
 		}
 
-		fp := filepath.Join(searchDir, "headers.toml")
+		fp := filepath.Join(searchDir, filename)
 		if _, err := os.Stat(fp); err == nil {
 			// file found in this directory
 			if Verbose {
