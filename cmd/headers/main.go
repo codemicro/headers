@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/codemicro/headers/internal/hooks"
-	"github.com/codemicro/headers/pkg/headers"
+	"github.com/codemicro/headers/internal/headers"
 	"github.com/urfave/cli/v2"
 )
 
