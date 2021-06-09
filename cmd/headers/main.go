@@ -1,32 +1,66 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
+	"github.com/codemicro/headers/internal/hooks"
 	"github.com/codemicro/headers/pkg/headers"
+	"github.com/urfave/cli/v2"
 )
-
-var inputFile = flag.String("i", "headers.toml", "input file to read configuration from")
-
-func e(err error) {
-	fmt.Fprintln(os.Stderr, "ERROR:", err)
-	os.Exit(1)
-}
 
 func main() {
 
-	flag.Parse()
+	app := &cli.App{
+		UseShortOptionHandling: true,
 
-	cfg, err := headers.LoadConfigFromFile(*inputFile)
-	if err != nil {
-		e(err)
+		Name:  "headers",
+		Usage: "apply headers to source code files",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "inputfile",
+				Value:   "headers.toml",
+				Usage:   "input file to read configuration from",
+				Aliases: []string{"i"},
+			},
+			&cli.BoolFlag{
+				Name:        "lint",
+				Usage:       "enables lint mode (useful for Git hooks)",
+				Destination: &headers.LintMode,
+				Aliases:     []string{"l"},
+			},
+			&cli.BoolFlag{
+				Name:        "verbose",
+				Usage:       "enables verbose mode",
+				Destination: &headers.Verbose,
+				Aliases:     []string{"v"},
+			},
+		},
+		Action: func(ctx *cli.Context) error {
+
+			cfg, err := headers.LoadConfigFromFile(ctx.String("inputfile"))
+			if err != nil {
+				return err
+			}
+
+			err = headers.Run(cfg, ctx.Args().Slice())
+			if err != nil {
+				return err
+			}
+
+			return nil
+
+		},
+
+		Commands: []*cli.Command{
+			hooks.RegisterGitHooks(),
+		},
 	}
 
-	err = headers.Run(cfg, flag.Args())
+	err := app.Run(os.Args)
 	if err != nil {
-		e(err)
+		fmt.Fprintln(os.Stderr, "ERROR:", err)
+		// os.Exit(1)
 	}
 
 }

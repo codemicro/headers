@@ -3,7 +3,6 @@ package headers
 import (
 	"bytes"
 	"errors"
-	"flag"
 	"fmt"
 	"io/fs"
 	"io/ioutil"
@@ -14,8 +13,8 @@ import (
 	"text/template"
 )
 
-var lintMode = flag.Bool("lint", false, "enables lint mode (useful for Git hooks)")
-var verbose = flag.Bool("v", false, "enables verbose mode")
+var LintMode bool
+var Verbose bool
 
 type transformation struct {
 	Filename string
@@ -47,7 +46,7 @@ func Run(cfg *Config, cmdLineFiles []string) error {
 		files = filtered
 	}
 
-	if *verbose {
+	if Verbose {
 		fmt.Fprintln(os.Stderr, "Running against files:", files)
 	}
 
@@ -61,9 +60,9 @@ func Run(cfg *Config, cmdLineFiles []string) error {
 		transformations = append(transformations, tf)
 	}
 
-	if *verbose {
+	if Verbose {
 		s := "Applying transformations"
-		if *lintMode {
+		if LintMode {
 			s = "Checking transformations"
 		}
 		fmt.Fprintln(os.Stderr, s)
@@ -72,19 +71,19 @@ func Run(cfg *Config, cmdLineFiles []string) error {
 	var hasLintingFailed bool
 	for _, tf := range transformations {
 		if tf.NewFileContents == nil {
-			if *verbose {
+			if Verbose {
 				fmt.Fprintf(os.Stderr, "%s: no action required\n", tf.Filename)
 			}
 			continue
 		}
 
-		if *lintMode {
+		if LintMode {
 			fmt.Fprintf(os.Stderr, "LINT: %s has not had file headers applied\n", tf.Filename)
 			hasLintingFailed = true
 			continue
 		}
 
-		if *verbose {
+		if Verbose {
 			fmt.Fprintf(os.Stderr, "%s: updating file content\n", tf.Filename)
 		}
 		err = tf.apply(0644)
@@ -93,19 +92,18 @@ func Run(cfg *Config, cmdLineFiles []string) error {
 		}
 	}
 
-	if *lintMode {
+	if LintMode {
 		if hasLintingFailed {
 			return errors.New("linting did not pass")
 		} else {
 			fmt.Fprintln(os.Stderr, "LINT: ok")
 		}
 	}
-	
 
 	return nil
 }
 
-func makeFileRegexp(cfg *Config) (func (string) bool, error) {
+func makeFileRegexp(cfg *Config) (func(string) bool, error) {
 	var bx []string
 	for _, rg := range cfg.Spec {
 		bx = append(bx, rg.Regex)
@@ -121,7 +119,7 @@ func makeFileRegexp(cfg *Config) (func (string) bool, error) {
 		if err != nil {
 			return nil, err
 		}
-		return func (mx string) bool {
+		return func(mx string) bool {
 			return matchRegexp.MatchString(mx) && !excludeRegexp.MatchString(mx)
 		}, nil
 	}
@@ -286,13 +284,13 @@ func applyHeaderToBytes(fname, header string, file []byte, spec *Spec) ([]byte, 
 	var newFile []byte
 
 	if !rxp.Match(file) {
-		newFile = append(rendered.Bytes(), []byte("\n")...)
+		newFile = append(rendered.Bytes(), []byte("\n\n")...)
 		newFile = append(newFile, file...)
 	} else {
 		var firstDone bool
 		newFile = rxp.ReplaceAllFunc(file, func(b []byte) []byte {
 			if firstDone {
-				return nil
+				return []byte{} // removes extra/old license headers
 			}
 			firstDone = true
 			return rendered.Bytes()
