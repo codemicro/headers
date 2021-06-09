@@ -1,3 +1,8 @@
+// https://github.com/codemicro/headers
+// Copyright (c) 2021, codemicro and contributors
+// SPDX-License-Identifier: MIT
+// Filename: cmd/headers/main.go
+
 package main
 
 import (
