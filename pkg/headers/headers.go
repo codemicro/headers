@@ -3,7 +3,6 @@ package headers
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io/fs"
 	"io/ioutil"
 	"log"
@@ -50,7 +49,7 @@ func Run(cfg *Config, cmdLineFiles []string) error {
 	}
 
 	if Verbose {
-		fmt.Fprintln(os.Stderr, "Running against files:", files)
+		logger.Println("Running against files:", files)
 	}
 
 	var transformations []*transformation
@@ -68,26 +67,26 @@ func Run(cfg *Config, cmdLineFiles []string) error {
 		if LintMode {
 			s = "Checking transformations"
 		}
-		fmt.Fprintln(os.Stderr, s)
+		logger.Println(s)
 	}
 
 	var hasLintingFailed bool
 	for _, tf := range transformations {
 		if tf.NewFileContents == nil {
 			if Verbose {
-				fmt.Fprintf(os.Stderr, "%s: no action required\n", tf.Filename)
+				logger.Printf("%s: no action required\n", tf.Filename)
 			}
 			continue
 		}
 
 		if LintMode {
-			fmt.Fprintf(os.Stderr, "LINT: %s has not had file headers applied\n", tf.Filename)
+			logger.Printf("LINT: %s has not had file headers applied\n", tf.Filename)
 			hasLintingFailed = true
 			continue
 		}
 
 		if Verbose {
-			fmt.Fprintf(os.Stderr, "%s: updating file content\n", tf.Filename)
+			logger.Printf("%s: updating file content\n", tf.Filename)
 		}
 		err = tf.apply(0644)
 		if err != nil {
@@ -99,7 +98,7 @@ func Run(cfg *Config, cmdLineFiles []string) error {
 		if hasLintingFailed {
 			return errors.New("linting did not pass")
 		} else {
-			fmt.Fprintln(os.Stderr, "LINT: ok")
+			logger.Println("LINT: ok")
 		}
 	}
 
@@ -249,7 +248,7 @@ func generateTransformationForFile(fpath string, cfg *Config) (*transformation, 
 	}
 
 	if chosenSpec == nil {
-		fmt.Fprintf(os.Stderr, "WARN: Cannot find spec for file '%s'\n", fpath)
+		logger.Printf("WARN: Cannot find spec for file '%s'\n", fpath)
 		return nil, nil
 	}
 
