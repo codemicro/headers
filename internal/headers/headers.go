@@ -180,6 +180,9 @@ func transformHeaderBySpec(header string, spec *Spec) string {
 	newLines := make([]string, len(lines))
 	for i, line := range lines {
 		newLines[i] = spec.Comment + " " + line
+		if spec.EndComment != "" {
+			newLines[i] += " " + spec.EndComment
+		}
 	}
 	return strings.Join(newLines, "\n")
 }

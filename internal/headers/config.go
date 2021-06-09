@@ -12,8 +12,10 @@ import (
 
 type Spec struct {
 	Regex      string
-	Comment    string
 	compRegexp *regexp.Regexp
+	
+	Comment    string
+	EndComment string
 }
 
 type Options struct {
