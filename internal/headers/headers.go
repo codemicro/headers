@@ -60,12 +60,52 @@ func Run(cfg *Config, cmdLineFiles []string) error {
 	var transformations []*transformation
 
 	for _, fname := range files {
-		tf, err := generateTransformationForFile(fname, cfg)
+		tf, err := generateUpdateTransformation(fname, cfg)
 		if err != nil {
 			return err
 		}
 		transformations = append(transformations, tf)
 	}
+
+	return executeTransformations(transformations)
+}
+
+func Replace(cfg *Config, cmdLineFiles []string, newHeader string) error {
+
+	var files []string
+	var err error
+	if len(cmdLineFiles) == 0 {
+		files, err = discoverFiles(".", cfg)
+		if err != nil {
+			return nil
+		}
+	} else {
+		filtered, err := filterFileList(cmdLineFiles, cfg)
+		if err != nil {
+			return err
+		}
+		files = filtered
+	}
+
+	if Verbose {
+		logger.Println("Running against files:", files)
+	}
+
+	var transformations []*transformation
+
+	for _, fname := range files {
+		tf, err := generateReplaceTransformation(newHeader, fname, cfg)
+		if err != nil {
+			return err
+		}
+		transformations = append(transformations, tf)
+	}
+
+	return executeTransformations(transformations)
+
+}
+
+func executeTransformations(transformations []*transformation) error {
 
 	if Verbose {
 		s := "Applying transformations"
@@ -93,7 +133,7 @@ func Run(cfg *Config, cmdLineFiles []string) error {
 		if Verbose {
 			logger.Printf("%s: updating file content\n", tf.Filename)
 		}
-		err = tf.apply(0644)
+		err := tf.apply(0644)
 		if err != nil {
 			return err
 		}
@@ -233,26 +273,34 @@ func renderHeader(headerText string, tplContent *headerTemplate) (*bytes.Buffer,
 	return buf, nil
 }
 
-func generateTransformationForFile(fpath string, cfg *Config) (*transformation, error) {
+func getFileInfo(fpath string, cfg *Config) (originalFileContents []byte, templateFilename string, spec *Spec, err error) {
 
-	originalFileContents, err := ioutil.ReadFile(fpath)
+	originalFileContents, err = ioutil.ReadFile(fpath)
 	if err != nil {
-		return nil, err
+		return nil, "", nil, err
 	}
 
-	var templateFilename string
 	if cfg.Options.FullFilepath {
 		templateFilename = fpath
 	} else {
 		templateFilename = filepath.Base(fpath)
 	}
 
-	var chosenSpec *Spec
-	for _, spec := range cfg.Spec {
-		if spec.compRegexp.MatchString(fpath) {
-			chosenSpec = spec
+	for _, s := range cfg.Spec {
+		if s.compRegexp.MatchString(fpath) {
+			spec = s
 			break
 		}
+	}
+
+	return
+}
+
+func generateUpdateTransformation(fpath string, cfg *Config) (*transformation, error) {
+
+	originalFileContents, templateFilename, chosenSpec, err := getFileInfo(fpath, cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	if chosenSpec == nil {
@@ -281,12 +329,12 @@ func applyHeaderToBytes(fname, header string, file []byte, spec *Spec) ([]byte, 
 
 	specHeader := transformHeaderBySpec(header, spec)
 
-	rxp, err := regexp.Compile(replaceTemplateLiteralsWithRegexp(specHeader, "(.+)"))
+	rendered, err := renderHeader(specHeader, newHeaderTemplate(fname))
 	if err != nil {
 		return nil, err
 	}
 
-	rendered, err := renderHeader(specHeader, newHeaderTemplate(fname))
+	rxp, err := regexp.Compile(replaceTemplateLiteralsWithRegexp(specHeader, "(.+)"))
 	if err != nil {
 		return nil, err
 	}
@@ -308,4 +356,55 @@ func applyHeaderToBytes(fname, header string, file []byte, spec *Spec) ([]byte, 
 	}
 
 	return newFile, nil
+}
+
+func generateReplaceTransformation(newHeader, fpath string, cfg *Config) (*transformation, error) {
+
+	originalFileContents, templateFilename, chosenSpec, err := getFileInfo(fpath, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	if chosenSpec == nil {
+		logger.Printf("WARN: Cannot find spec for file '%s'\n", fpath)
+		return nil, nil
+	}
+
+	newFileContents, err := replaceHeaderInBytes(originalFileContents, templateFilename, cfg.HeaderText, newHeader, chosenSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	if bytes.Equal(originalFileContents, newFileContents) {
+		return &transformation{
+			Filename: fpath,
+		}, nil
+	}
+
+	return &transformation{
+		Filename:        fpath,
+		NewFileContents: newFileContents,
+	}, nil
+}
+
+func replaceHeaderInBytes(file []byte, fname, oldHeader, newHeader string, spec *Spec) ([]byte, error) {
+
+	oldSpecHeader := transformHeaderBySpec(oldHeader, spec)
+	newSpecHeader := transformHeaderBySpec(newHeader, spec)
+
+	newRendered, err := renderHeader(newSpecHeader, newHeaderTemplate(fname))
+	if err != nil {
+		return nil, err
+	}
+
+	rxp, err := regexp.Compile(replaceTemplateLiteralsWithRegexp(oldSpecHeader, "(.+)"))
+	if err != nil {
+		return nil, err
+	}
+
+	if rxp.Match(file) {
+		return rxp.ReplaceAll(file, newRendered.Bytes()), nil
+	}
+
+	return nil, nil
 }

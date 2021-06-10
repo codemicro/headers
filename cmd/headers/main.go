@@ -59,6 +59,7 @@ func main() {
 		Commands: []*cli.Command{
 			commands.RegisterGitHooks(),
 			commands.RegisterDefault(),
+			commands.RegisterReplaceHeader(),
 		},
 	}
 
