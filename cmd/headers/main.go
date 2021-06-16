@@ -66,7 +66,7 @@ func main() {
 	err := app.Run(os.Args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR:", err)
-		// os.Exit(1)
+		os.Exit(1)
 	}
 
 }
