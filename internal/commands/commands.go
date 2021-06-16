@@ -16,7 +16,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const githookContent = "#!/bin/sh\nfiles=`git diff --name-only --cached`\nheaders --lint $files\n"
+const githookContent = "#!/bin/bash\nfiles=`git diff --name-only --cached`\nheaders --lint $files\nexit $?\n"
 
 func RegisterGitHooks() *cli.Command {
 	return &cli.Command{
